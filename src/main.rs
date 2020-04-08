@@ -99,7 +99,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stdin: RawFd = 0;
 
     // Get the termios config for the terminal connected to this process.
-    let mut termios = termios::tcgetattr(stdin)?;
+    let saved = termios::tcgetattr(stdin)?;
+    let mut termios = saved.clone();
 
     // Set the current terminal to 'raw' mode.
     term_set_raw(stdin, &mut termios)?;
@@ -110,5 +111,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Opened new PTY device: {}", pty_pair.slave_name);
 
     // Proxy between our stdin device and the PTY master device.
-    proxy_term(stdin, pty_pair.master)
+    proxy_term(stdin, pty_pair.master)?;
+
+    // Restore the terminal to its original settings.
+    termios::tcsetattr(stdin, termios::SetArg::TCSANOW, &saved)?;
+
+    Ok(())
 }
