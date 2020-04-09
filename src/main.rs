@@ -46,6 +46,11 @@ fn proxy_term(stdin: RawFd, pty_master: PtyMaster) -> Result<(), Box<dyn Error>>
         Interest::READABLE,
     )?;
 
+    // Grab handle and lock stdin to prevent excess locking during
+    // our loop below.
+    let stdin = io::stdin();
+    let mut stdin_hdl = stdin.lock();
+
     loop {
         // Poll for events, blocking until we get an event.
         poll.poll(&mut events, None)?;
@@ -57,7 +62,7 @@ fn proxy_term(stdin: RawFd, pty_master: PtyMaster) -> Result<(), Box<dyn Error>>
             }
             match event.token() {
                 STDIN => {
-                    let n = io::stdin().read(&mut buf)?;
+                    let n = stdin_hdl.read(&mut buf)?;
                     fpty_master.write_all(&mut buf[0..n])?;
                 }
                 PTY_MASTER => {
