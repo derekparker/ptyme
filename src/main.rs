@@ -26,7 +26,7 @@ fn term_set_raw(fd: RawFd, termios: &mut termios::Termios) -> Result<(), nix::Er
     termios::tcsetattr(fd, termios::SetArg::TCSANOW, termios)
 }
 
-fn write_buffer_to<Buf: BufRead, F: Write>(rdr: &mut Buf, mut f: F) -> Result<(), Box<dyn Error>> {
+fn write_buffer_to(rdr: &mut dyn BufRead, f: &mut dyn Write) -> Result<(), Box<dyn Error>> {
     let buf = rdr.fill_buf()?;
     f.write_all(buf)?;
     f.flush()?;
