@@ -59,6 +59,8 @@ fn proxy_term(stdin: RawFd, pty_master: PtyMaster) -> Result<(), Box<dyn Error>>
     // our loop below.
     let stdin = io::stdin();
     let mut stdin_hdl = stdin.lock();
+    let stdout = io::stdout();
+    let mut stdout_hdl = stdout.lock();
 
     loop {
         // Poll for events, blocking until we get an event.
@@ -74,7 +76,7 @@ fn proxy_term(stdin: RawFd, pty_master: PtyMaster) -> Result<(), Box<dyn Error>>
                     write_buffer_to(&mut stdin_hdl, fpty_master.get_mut())?;
                 }
                 PTY_MASTER => {
-                    write_buffer_to(&mut fpty_master, io::stdout())?;
+                    write_buffer_to(&mut fpty_master, &mut stdout_hdl)?;
                 }
                 // We don't expect any events with tokens other than those we provided.
                 _ => unreachable!(),
