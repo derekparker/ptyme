@@ -26,6 +26,8 @@ fn term_set_raw(fd: RawFd, termios: &mut termios::Termios) -> Result<(), nix::Er
     termios::tcsetattr(fd, termios::SetArg::TCSANOW, termios)
 }
 
+/// Writes the buffer `rdr` to the writer `f`.
+/// Always calls `f.flush()`.
 fn write_buffer_to(rdr: &mut dyn BufRead, f: &mut dyn Write) -> Result<(), Box<dyn Error>> {
     let buf = rdr.fill_buf()?;
     f.write_all(buf)?;
@@ -85,6 +87,8 @@ fn proxy_term(stdin: RawFd, pty_master: PtyMaster) -> Result<(), Box<dyn Error>>
     }
 }
 
+/// Opens and returns a new PTY pair.
+/// The pair contains the PTY master FD and the slave path.
 fn new_pty() -> Result<PtyPair, Box<dyn Error>> {
     // Open a new PTY master.
     let master = pty::posix_openpt(OFlag::O_RDWR)?;
