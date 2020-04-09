@@ -2,11 +2,11 @@ use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use std::os::unix::io::{FromRawFd, IntoRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 
 use nix::fcntl::OFlag;
-use nix::pty;
 use nix::sys::termios;
+use nix::{pty, unistd};
 
 use mio::unix::SourceFd;
 use mio::{Events, Interest, Poll, Token};
@@ -36,14 +36,8 @@ fn proxy_term(stdin: RawFd, pty_master: PtyMaster) -> Result<(), Box<dyn Error>>
     // Use IntoRawFd here because we want to transfer ownership of the
     // file descriptor to this function. This prevents a "double drop"
     // when main returns.
-    let pty_master_fd = pty_master.into_raw_fd();
+    let pty_master_fd = unistd::dup(pty_master.as_raw_fd())?;
     let fpty_master: &mut File = unsafe { &mut File::from_raw_fd(pty_master_fd) };
-
-    // We have to use a raw handle to the stdout stream due to the
-    // lock that is put on it if we get a reference via io::stdout().
-    // If we get a locked reference you cannot see what you're typing
-    // as you're typing it.
-    let fstdout: &mut File = unsafe { &mut File::from_raw_fd(1) };
 
     // Register stdin, wait for it to be readable.
     poll.registry()
@@ -72,7 +66,8 @@ fn proxy_term(stdin: RawFd, pty_master: PtyMaster) -> Result<(), Box<dyn Error>>
                 }
                 PTY_MASTER => {
                     let n = fpty_master.read(&mut buf)?;
-                    fstdout.write_all(&mut buf[0..n])?;
+                    io::stdout().write_all(&mut buf[0..n])?;
+                    io::stdout().flush()?;
                 }
                 // We don't expect any events with tokens other than those we provided.
                 _ => unreachable!(),
