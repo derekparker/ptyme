@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::fs::File;
-use std::io;
-use std::io::prelude::*;
+use std::io::{self, BufRead, BufReader, Write};
 use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 
 use nix::fcntl::OFlag;
@@ -27,13 +26,23 @@ fn term_set_raw(fd: RawFd, termios: &mut termios::Termios) -> Result<(), nix::Er
     termios::tcsetattr(fd, termios::SetArg::TCSANOW, termios)
 }
 
+fn write_buffer_to<Buf: BufRead, F: Write>(rdr: &mut Buf, mut f: F) -> Result<(), Box<dyn Error>> {
+    let buf = rdr.fill_buf()?;
+    f.write_all(buf)?;
+    f.flush()?;
+    let len = buf.len();
+    rdr.consume(len);
+
+    Ok(())
+}
+
 /// Proxies between stdin of this process to the master terminal device.
 fn proxy_term(stdin: RawFd, pty_master: PtyMaster) -> Result<(), Box<dyn Error>> {
     let mut poll = Poll::new()?;
     let mut events = Events::with_capacity(128);
-    let mut buf: [u8; 2048] = [0; 2048];
     let pty_master_fd = unistd::dup(pty_master.as_raw_fd())?;
-    let fpty_master: &mut File = unsafe { &mut File::from_raw_fd(pty_master_fd) };
+    let fpty_master: File = unsafe { File::from_raw_fd(pty_master_fd) };
+    let mut fpty_master = BufReader::new(fpty_master);
 
     // Register stdin, wait for it to be readable.
     poll.registry()
@@ -62,13 +71,10 @@ fn proxy_term(stdin: RawFd, pty_master: PtyMaster) -> Result<(), Box<dyn Error>>
             }
             match event.token() {
                 STDIN => {
-                    let n = stdin_hdl.read(&mut buf)?;
-                    fpty_master.write_all(&mut buf[0..n])?;
+                    write_buffer_to(&mut stdin_hdl, fpty_master.get_mut())?;
                 }
                 PTY_MASTER => {
-                    let n = fpty_master.read(&mut buf)?;
-                    io::stdout().write_all(&mut buf[0..n])?;
-                    io::stdout().flush()?;
+                    write_buffer_to(&mut fpty_master, io::stdout())?;
                 }
                 // We don't expect any events with tokens other than those we provided.
                 _ => unreachable!(),
@@ -98,13 +104,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let saved = termios::tcgetattr(stdin)?;
     let mut termios = saved.clone();
 
-    // Set the current terminal to 'raw' mode.
-    term_set_raw(stdin, &mut termios)?;
-
     // Open a new pty master device.
     let pty_pair = new_pty()?;
 
     println!("Opened new PTY device: {}", pty_pair.slave_name);
+
+    // Set the current terminal to 'raw' mode.
+    term_set_raw(stdin, &mut termios)?;
 
     // Proxy between our stdin device and the PTY master device.
     proxy_term(stdin, pty_pair.master)?;
