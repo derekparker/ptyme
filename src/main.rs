@@ -28,7 +28,7 @@ fn term_set_raw(fd: RawFd, termios: &mut termios::Termios) -> Result<(), nix::Er
 
 /// Writes the buffer `rdr` to the writer `f`.
 /// Always calls `f.flush()`.
-fn write_buffer_to(rdr: &mut dyn BufRead, f: &mut dyn Write) -> Result<(), Box<dyn Error>> {
+fn write_buffer_to(mut rdr: impl BufRead, mut f: impl Write) -> Result<(), Box<dyn Error>> {
     let buf = rdr.fill_buf()?;
     f.write_all(buf)?;
     f.flush()?;
