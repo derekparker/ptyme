@@ -32,10 +32,6 @@ fn proxy_term(stdin: RawFd, pty_master: PtyMaster) -> Result<(), Box<dyn Error>>
     let mut poll = Poll::new()?;
     let mut events = Events::with_capacity(128);
     let mut buf: [u8; 2048] = [0; 2048];
-
-    // Use IntoRawFd here because we want to transfer ownership of the
-    // file descriptor to this function. This prevents a "double drop"
-    // when main returns.
     let pty_master_fd = unistd::dup(pty_master.as_raw_fd())?;
     let fpty_master: &mut File = unsafe { &mut File::from_raw_fd(pty_master_fd) };
 
